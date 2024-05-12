@@ -22,3 +22,9 @@ test "simple test" {
     try list.append(42);
     try std.testing.expectEqual(@as(i32, 42), list.pop());
 }
+
+fn parseTorrentFile(filePath: []const u8) void {
+    std.debug.print("torrent file path = {s}", .{filePath});
+
+    return;
+}

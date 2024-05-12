@@ -1,0 +1,3 @@
+[submodule "zig-bencode"]
+	path = zig-bencode
+	url = git@github-personal:duyquang6/zig-bencode.git
