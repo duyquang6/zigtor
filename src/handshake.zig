@@ -18,7 +18,8 @@ const Handshake = struct {
         @memcpy(buf[curr .. curr + 19], &self.pstr);
 
         curr += 19;
-        @memcpy(buf[curr .. curr + 8], &std.mem.zeroes([8]u8));
+        // @memcpy(buf[curr .. curr + 8], &std.mem.zeroes([8]u8));
+        @memcpy(buf[curr .. curr + 8], &[_]u8{0} ** 8);
 
         curr += 8;
         @memcpy(buf[curr .. curr + 20], &self.info_hash);
