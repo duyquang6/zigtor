@@ -5,12 +5,12 @@ const bencode = @import("bencode.zig");
 
 pub const HandshakeError = error{InvalidData};
 
-const Handshake = struct {
+pub const Handshake = struct {
     pstr: [19]u8 = "BitTorrent protocol".*,
     info_hash: [20]u8,
     peer_id: [20]u8,
 
-    fn serialize(self: Handshake) [68]u8 {
+    pub fn serialize(self: Handshake) [68]u8 {
         var buf: [68]u8 = std.mem.zeroes([68]u8);
         buf[0] = self.pstr.len;
 
@@ -30,7 +30,7 @@ const Handshake = struct {
         return buf;
     }
 
-    fn deserialize(input: []const u8) !Handshake {
+    pub fn deserialize(input: []const u8) !Handshake {
         if (input.len < 68) {
             return HandshakeError.InvalidData;
         }

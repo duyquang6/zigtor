@@ -32,7 +32,7 @@ pub const Message = struct {
     id: MessageEnum,
     payload: []const u8,
 
-    fn formatRequest(index: u32, begin: u32, length: u32) !Message {
+    pub fn formatRequest(index: u32, begin: u32, length: u32) !Message {
         var payload = [_]u8{0} ** 12;
         std.mem.writeInt(u32, payload[0..4], index, std.builtin.Endian.big);
         std.mem.writeInt(u32, payload[4..8], begin, std.builtin.Endian.big);
@@ -40,13 +40,13 @@ pub const Message = struct {
         return Message{ .id = .Request, .payload = &payload };
     }
 
-    fn formatHave(index: u32) !Message {
+    pub fn formatHave(index: u32) !Message {
         var payload = [_]u8{0} ** 4;
         std.mem.writeInt(u32, payload[0..4], index, std.builtin.Endian.big);
         return Message{ .id = .Have, .payload = &payload };
     }
 
-    fn marshalPiece(self: Message, buf: []u8, index: u32) !u32 {
+    pub fn marshalPiece(self: Message, buf: []u8, index: u32) !u32 {
         if (self.id != .Piece) {
             return MessageError.Invalid;
         }
@@ -74,7 +74,7 @@ pub const Message = struct {
         return @intCast(piece_data.len);
     }
 
-    fn marshalHave(self: Message) !u32 {
+    pub fn marshalHave(self: Message) !u32 {
         if (self.id != .Have) {
             return MessageError.Invalid;
         }
@@ -88,7 +88,7 @@ pub const Message = struct {
         return @intCast(parsed_index);
     }
 
-    fn serialize(self: ?Message, allocator: std.mem.Allocator) ![]const u8 {
+    pub fn serialize(self: ?Message, allocator: std.mem.Allocator) ![]const u8 {
         if (self) |msg| {
             const length: u32 = @intCast(msg.payload.len + 1);
             var buf = try std.ArrayList(u8).initCapacity(allocator, 4 + length);
@@ -103,7 +103,7 @@ pub const Message = struct {
         return &[_]u8{0} ** 4;
     }
 
-    fn deserialize(input: []const u8) ?Message {
+    pub fn deserialize(input: []const u8) ?Message {
         if (input.len < 4) {
             return null;
         }
