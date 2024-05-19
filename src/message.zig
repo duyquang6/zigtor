@@ -10,17 +10,17 @@ pub const MessageEnum = enum {
     Unchoke,
     // Interested expresses interest in receiving data
     Interested,
-    // MsgNotInterested expresses disinterest in receiving data
+    // NotInterested expresses disinterest in receiving data
     NotInterested,
-    // MsgHave alerts the receiver that the sender has downloaded a piece
+    // Have alerts the receiver that the sender has downloaded a piece
     Have,
-    // MsgBitfield encodes which pieces that the sender has downloaded
+    // Bitfield encodes which pieces that the sender has downloaded
     Bitfield,
-    // MsgRequest requests a block of data from the receiver
+    // Request requests a block of data from the receiver
     Request,
-    // MsgPiece delivers a block of data to fulfill a request
+    // Piece delivers a block of data to fulfill a request
     Piece,
-    // MsgCancel cancels a request
+    // Cancel cancels a request
     Cancel,
 };
 
@@ -88,9 +88,34 @@ pub const Message = struct {
         return @intCast(parsed_index);
     }
 
-    fn serialize(self: Message) []const u8 {
-        _ = self;
-        return undefined;
+    fn serialize(self: ?Message, allocator: std.mem.Allocator) ![]const u8 {
+        if (self) |msg| {
+            const length: u32 = @intCast(msg.payload.len + 1);
+            var buf = try std.ArrayList(u8).initCapacity(allocator, 4 + length);
+            defer buf.deinit();
+
+            try buf.writer().writeInt(u32, length, std.builtin.Endian.big);
+            try buf.writer().writeByte(@intFromEnum(msg.id));
+            try buf.writer().writeAll(msg.payload);
+            return buf.toOwnedSlice();
+        }
+
+        return &[_]u8{0} ** 4;
+    }
+
+    fn deserialize(input: []const u8) ?Message {
+        if (input.len < 4) {
+            return null;
+        }
+        const length = std.mem.readInt(u32, input[0..4], std.builtin.Endian.big);
+
+        if (length == 0) {
+            return null;
+        }
+
+        const msg_buf = input[4 .. 4 + length];
+
+        return Message{ .id = @enumFromInt(msg_buf[0]), .payload = msg_buf[1..] };
     }
 };
 
@@ -144,4 +169,29 @@ test "marshalHave OK" {
     const have_msg = Message{ .id = .Have, .payload = &payload };
     const index = try have_msg.marshalHave();
     try testing.expectEqual(4, index);
+}
+
+test "serialize OK" {
+    const payload = [_]u8{ 1, 2, 3, 4 };
+    const input_msg = Message{ .id = .Have, .payload = payload[0..] };
+    const output_expected = [_]u8{ 0, 0, 0, 5, 4, 1, 2, 3, 4 };
+
+    const actual = try input_msg.serialize(testing.allocator);
+    defer testing.allocator.free(actual);
+    try testing.expectEqualSlices(u8, output_expected[0..], actual);
+
+    // const keepalive: ?Message = null;
+
+    const output_keepalive_expected = [_]u8{ 0, 0, 0, 0 };
+    const actual_keepalive_out = try Message.serialize(null, testing.allocator);
+    try testing.expectEqualSlices(u8, output_keepalive_expected[0..], actual_keepalive_out);
+}
+test "deserialize OK" {
+    const input = [_]u8{ 0, 0, 0, 5, 4, 1, 2, 3, 4 };
+    const output_msg = Message{ .id = .Have, .payload = &[_]u8{ 1, 2, 3, 4 } };
+
+    const msg = Message.deserialize(&input).?;
+
+    try testing.expectEqual(output_msg.id, msg.id);
+    try testing.expectEqualSlices(u8, output_msg.payload, msg.payload);
 }
