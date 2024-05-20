@@ -7,9 +7,218 @@ const message = @import("message.zig");
 
 const ClientError = error{InvalidMessageID};
 pub const Client = struct {
+    conn: std.net.Stream,
     peer_id: [20]u8,
     info_hash: [20]u8,
+
+    pub fn read(self: Client) !?message.Message {
+        var input_buf: [1024]u8 = undefined;
+        _ = try self.conn.read(&input_buf);
+        return message.Message.deserialize(&input_buf);
+    }
+
+    pub fn sendRequest(self: Client, index: u32, begin: u32, length: u32) !void {
+        var buf: [1024]u8 = undefined;
+        const msg = try message.Message.formatRequest(index, begin, length, &buf);
+        var buffer: [1024]u8 = undefined;
+        const send_data = try msg.serialize(&buffer);
+        _ = try self.conn.write(send_data);
+    }
+
+    pub fn sendInterested(self: Client) !void {
+        const msg = message.Message{
+            .id = .Interested,
+        };
+        var buffer: [1024]u8 = undefined;
+        const send_data = try msg.serialize(&buffer);
+        _ = try self.conn.write(send_data);
+    }
+
+    pub fn sendNotInterested(self: Client) !void {
+        const msg = message.Message{ .id = .NotInterested };
+        var buffer: [1024]u8 = undefined;
+        const send_data = try msg.serialize(&buffer);
+        _ = try self.conn.write(send_data);
+    }
+
+    pub fn sendUnchoke(self: Client) !void {
+        const msg = message.Message{
+            .id = .Unchoke,
+        };
+        var buffer: [1024]u8 = undefined;
+        const send_data = try msg.serialize(&buffer);
+        _ = try self.conn.write(send_data);
+    }
+
+    pub fn sendHave(self: Client, index: u32) !void {
+        var buf: [1024]u8 = undefined;
+        const msg = try message.Message.formatHave(index, &buf);
+        var buffer: [1024]u8 = undefined;
+        const send_data = try msg.serialize(&buffer);
+        _ = try self.conn.write(send_data);
+    }
 };
+
+test "read OK" {
+    var server = try TestServer.init();
+    defer server.deinit();
+    std.debug.print("\nserver_address={}\n", .{server.server.listen_address});
+
+    const S = struct {
+        fn read(address: net.Address) !void {
+            var conn = try net.tcpConnectToAddress(address);
+            defer conn.close();
+
+            const client = Client{ .conn = conn, .peer_id = undefined, .info_hash = undefined };
+            const msg = (try client.read()).?;
+
+            try testing.expectEqualSlices(u8, &[_]u8{
+                0x00, 0x00, 0x05, 0x3c,
+            }, msg.payload.?);
+        }
+    };
+
+    const t = try std.Thread.spawn(.{}, S.read, .{server.server.listen_address});
+    defer t.join();
+
+    try TestServer.acceptConn(server, null, &[_]u8{
+        0x00, 0x00, 0x00, 0x05,
+        4,    0x00, 0x00, 0x05,
+        0x3c,
+    });
+}
+test "sendHave OK" {
+    var server = try TestServer.init();
+    defer server.deinit();
+    std.debug.print("\nserver_address={}\n", .{server.server.listen_address});
+
+    const S = struct {
+        fn send(address: net.Address) !void {
+            var conn = try net.tcpConnectToAddress(address);
+            defer conn.close();
+
+            const client = Client{ .conn = conn, .peer_id = undefined, .info_hash = undefined };
+
+            _ = try client.sendHave(1340);
+            print("\nclose conn\n", .{});
+        }
+    };
+
+    const t = try std.Thread.spawn(.{}, S.send, .{server.server.listen_address});
+    defer t.join();
+
+    try TestServer.acceptConn(server, &[_]u8{
+        0x00, 0x00, 0x00, 0x05,
+        4,    0x00, 0x00, 0x05,
+        0x3c,
+    }, null);
+}
+
+test "sendNotInterested OK" {
+    var server = try TestServer.init();
+    defer server.deinit();
+    std.debug.print("\nserver_address={}\n", .{server.server.listen_address});
+
+    const S = struct {
+        fn send(address: net.Address) !void {
+            var conn = try net.tcpConnectToAddress(address);
+            defer conn.close();
+
+            const client = Client{ .conn = conn, .peer_id = undefined, .info_hash = undefined };
+
+            _ = try client.sendNotInterested();
+            print("\nclose conn\n", .{});
+        }
+    };
+
+    const t = try std.Thread.spawn(.{}, S.send, .{server.server.listen_address});
+    defer t.join();
+
+    try TestServer.acceptConn(server, &[_]u8{
+        0x00, 0x00, 0x00, 0x01,
+        3,
+    }, null);
+}
+test "sendInterested OK" {
+    var server = try TestServer.init();
+    defer server.deinit();
+    std.debug.print("\nserver_address={}\n", .{server.server.listen_address});
+
+    const S = struct {
+        fn send(address: net.Address) !void {
+            var conn = try net.tcpConnectToAddress(address);
+            defer conn.close();
+
+            const client = Client{ .conn = conn, .peer_id = undefined, .info_hash = undefined };
+
+            _ = try client.sendInterested();
+            print("\nclose conn\n", .{});
+        }
+    };
+
+    const t = try std.Thread.spawn(.{}, S.send, .{server.server.listen_address});
+    defer t.join();
+
+    try TestServer.acceptConn(server, &[_]u8{
+        0x00, 0x00, 0x00, 0x01,
+        2,
+    }, null);
+}
+
+test "sendUnchoke OK" {
+    var server = try TestServer.init();
+    defer server.deinit();
+    std.debug.print("\nserver_address={}\n", .{server.server.listen_address});
+
+    const S = struct {
+        fn send(address: net.Address) !void {
+            var conn = try net.tcpConnectToAddress(address);
+            defer conn.close();
+
+            const client = Client{ .conn = conn, .peer_id = undefined, .info_hash = undefined };
+
+            _ = try client.sendUnchoke();
+            print("\nclose conn\n", .{});
+        }
+    };
+
+    const t = try std.Thread.spawn(.{}, S.send, .{server.server.listen_address});
+    defer t.join();
+
+    try TestServer.acceptConn(server, &[_]u8{
+        0x00, 0x00, 0x00, 0x01,
+        1,
+    }, null);
+}
+
+test "sendRequest OK" {
+    var server = try TestServer.init();
+    defer server.deinit();
+    std.debug.print("\nserver_address={}\n", .{server.server.listen_address});
+
+    const S = struct {
+        fn send(address: net.Address) !void {
+            var conn = try net.tcpConnectToAddress(address);
+            defer conn.close();
+
+            const client = Client{ .conn = conn, .peer_id = undefined, .info_hash = undefined };
+
+            _ = try client.sendRequest(1, 2, 3);
+            print("\nclose conn\n", .{});
+        }
+    };
+
+    const t = try std.Thread.spawn(.{}, S.send, .{server.server.listen_address});
+    defer t.join();
+
+    try TestServer.acceptConn(server, &[_]u8{
+        0x00, 0x00, 0x00, 0x0d,
+        6,    0x00, 0x00, 0x00,
+        0x01, 0x00, 0x00, 0x00,
+        0x02, 0x00, 0x00, 0x00,
+        0x03,
+    }, null);
+}
 
 fn completeHandshake(stream: std.net.Stream, info_hash: [20]u8, peer_id: [20]u8) !handshake.Handshake {
     const req = handshake.Handshake{ .peer_id = peer_id, .info_hash = info_hash };
@@ -70,10 +279,36 @@ fn receiveBitfield(stream: net.Stream) ![]const u8 {
             return ClientError.InvalidMessageID;
         }
 
-        return v.payload;
+        return v.payload.?;
     }
 
     return ClientError.InvalidMessageID;
+}
+
+test "receiveBitfield OK" {
+    var psrv = try TestServer.init();
+    defer psrv.deinit();
+
+    std.debug.print("\nserver_address={}\n", .{psrv.server.listen_address});
+
+    const S = struct {
+        fn testReceiveBitfield(address: net.Address) !void {
+            var conn = try net.tcpConnectToAddress(address);
+            defer conn.close();
+
+            _ = try receiveBitfield(conn);
+        }
+    };
+
+    const server_send_data = [_]u8{ 0x00, 0x00, 0x00, 0x06, 5, 1, 2, 3, 4, 5 };
+    const t = try std.Thread.spawn(.{}, S.testReceiveBitfield, .{psrv.server.listen_address});
+    defer t.join();
+
+    try TestServer.acceptConn(
+        psrv,
+        null,
+        &server_send_data,
+    );
 }
 
 const TestServer = struct {
@@ -89,18 +324,21 @@ const TestServer = struct {
         self.server.deinit();
     }
 
-    fn acceptConn(self: TestServer, expected: []const u8, payload: []const u8) !void {
+    fn acceptConn(self: TestServer, expected: ?[]const u8, payload: ?[]const u8) !void {
         std.debug.print("\naccepting connection\n", .{});
         // handle logic connection
         var conn = try self.server.accept();
         defer conn.stream.close();
 
-        var buf: [1024]u8 = undefined;
-        const msg_size = try conn.stream.read(&buf);
+        if (expected) |v| {
+            var buf: [1024]u8 = undefined;
+            const msg_size = try conn.stream.read(&buf);
+            try testing.expectEqualSlices(u8, v, buf[0..msg_size]);
+        }
 
-        try testing.expectEqualSlices(u8, expected, buf[0..msg_size]);
-
-        _ = try conn.stream.write(payload);
+        if (payload) |v| {
+            _ = try conn.stream.write(v);
+        }
     }
 
     fn sendMsgToServer(server_address: net.Address, payload: []const u8) !void {
