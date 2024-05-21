@@ -10,6 +10,8 @@ pub const Client = struct {
     conn: std.net.Stream,
     peer_id: [20]u8,
     info_hash: [20]u8,
+    bitfield: []u8,
+    choked: bool,
 
     pub fn read(self: Client) !?message.Message {
         var input_buf: [1024]u8 = undefined;
@@ -87,6 +89,7 @@ test "read OK" {
         0x3c,
     });
 }
+
 test "sendHave OK" {
     var server = try TestServer.init();
     defer server.deinit();
@@ -139,6 +142,7 @@ test "sendNotInterested OK" {
         3,
     }, null);
 }
+
 test "sendInterested OK" {
     var server = try TestServer.init();
     defer server.deinit();

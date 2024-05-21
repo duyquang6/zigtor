@@ -45,7 +45,7 @@ pub const Message = struct {
         return Message{ .id = .Have, .payload = buffer[0..4] };
     }
 
-    pub fn marshalPiece(self: Message, buf: []u8, index: u32) !u32 {
+    pub fn parsePiece(self: Message, buf: []u8, index: u32) !u32 {
         if (self.id != .Piece) {
             return MessageError.Invalid;
         }
@@ -73,7 +73,7 @@ pub const Message = struct {
         return MessageError.Invalid;
     }
 
-    pub fn marshalHave(self: Message) !u32 {
+    pub fn parseHave(self: Message) !u32 {
         if (self.id != .Have) {
             return MessageError.Invalid;
         }
@@ -161,7 +161,7 @@ test "marshalPiece OK" {
         0xee, 0xff, // block
     };
     const piece_msg = Message{ .id = .Piece, .payload = &payload };
-    const piece_data_len = try piece_msg.marshalPiece(&buf, 4);
+    const piece_data_len = try piece_msg.parsePiece(&buf, 4);
     try testing.expectEqual(6, piece_data_len);
 
     const expect_buf = [_]u8{
@@ -176,7 +176,7 @@ test "marshalHave OK" {
         0x00, 0x00, 0x00, 0x04, // begin
     };
     const have_msg = Message{ .id = .Have, .payload = &payload };
-    const index = try have_msg.marshalHave();
+    const index = try have_msg.parseHave();
     try testing.expectEqual(4, index);
 }
 

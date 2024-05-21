@@ -5,7 +5,7 @@ const bencode = @import("bencode.zig");
 
 pub const ParsePeerError = error{MalformPeerData};
 
-const PeerIPv4 = struct {
+pub const PeerIPv4 = struct {
     ip: u32,
     port: u16,
 
