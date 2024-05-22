@@ -4,6 +4,7 @@ const print = std.debug.print;
 const net = std.net;
 const handshake = @import("handshake.zig");
 const message = @import("message.zig");
+const peer = @import("peer.zig");
 
 const ClientError = error{InvalidMessageID};
 pub const Client = struct {
@@ -12,6 +13,17 @@ pub const Client = struct {
     info_hash: [20]u8,
     bitfield: []u8,
     choked: bool,
+
+    pub fn init(p: peer.PeerIPv4, peer_id: [20]u8, info_hash: [20]u8) !Client {
+        const addr = p.to_address();
+        var conn = try std.net.tcpConnectToAddress(addr);
+        errdefer conn.close();
+
+        _ = try completeHandshake(conn, info_hash, peer_id);
+        const bf = try receiveBitfield(conn);
+
+        return .{ .conn = conn, .peer_id = peer_id, .info_hash = info_hash, .bitfield = bf, .choked = true };
+    }
 
     pub fn read(self: Client) !?message.Message {
         var input_buf: [1024]u8 = undefined;

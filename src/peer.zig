@@ -9,6 +9,12 @@ pub const PeerIPv4 = struct {
     ip: u32,
     port: u16,
 
+    pub fn to_address(self: PeerIPv4) std.net.Address {
+        var buf: [4]u8 = undefined;
+        const ip_v4 = parse_ipv4(self.ip, &buf);
+        return std.net.Address.initIp4(ip_v4, self.port);
+    }
+
     fn parse(allocator: std.mem.Allocator, peer_bin: []const u8) ![]PeerIPv4 {
         const peer_size = 6;
         const num_peers = peer_bin.len / peer_size;
@@ -63,7 +69,19 @@ fn print_peers(ps: []PeerIPv4) void {
     std.debug.print("\n", .{});
 }
 
-fn print_ip(ip: u32) void {
+fn parse_ipv4(ip: u32, buf: []u8) [4]u8 {
+    var bitmask: u32 = std.math.maxInt(u32);
+
+    inline for (0..4) |i| {
+        const next_bitmask: u32 = bitmask >> 8;
+        buf[i] = (ip & (bitmask - next_bitmask)) >> (3 - i) * 8;
+        bitmask = next_bitmask;
+    }
+
+    return buf[0..4];
+}
+
+pub fn print_ip(ip: u32) void {
     var bitmask: u32 = std.math.maxInt(u32);
     inline for (0..4) |i| {
         const next_bitmask: u32 = bitmask >> 8;
