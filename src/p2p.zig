@@ -35,10 +35,40 @@ pub const Torrent = struct {
         return r.end - r.begin;
     }
 
-    fn startDownload(self: Torrent, p: peer.PeerIPv4) !void {
-        // const c = client.Client{ .peer_id = self.peer_id, .info_hash = self.info_hash };
-        _ = self;
-        _ = p;
+    fn startDownload(self: Torrent, p: peer.PeerIPv4, pws: []PieceWork, retry_pws: []PieceWork, results: []PieceResult) !void {
+        const c = try client.Client.init(p, self.peer_id, self.info_hash);
+        defer c.conn.close();
+
+        c.sendUnchoke();
+        c.sendInterested();
+
+        var i_retry: usize = 0;
+        var i_result: usize = 0;
+        for (pws) |pw| {
+            if (!bitfield.hasPiece(c.bitfield, pw.index)) {
+                retry_pws[i_retry] = pw;
+                i_retry += 1;
+                continue;
+            }
+
+            const buf = pw.attemptDownloadOnePiece(c) catch |err| {
+                std.debug.print("download piece {} failed, pushback retry later\n", .{pw.index});
+                return err;
+            };
+
+            pw.checkIntegrity(buf) catch {
+                std.debug.print("piece {} failed integrity check\n", .{pw.index});
+                continue;
+            };
+
+            c.sendHave(pw.index);
+            results[i_result] = PieceResult{ .index = pw.index, .buf = buf };
+            i_result += 1;
+        }
+    }
+
+    fn download(self: *Torrent) ![]u8 {
+        std.debug.print("Starting download for {s}", .{self.name});
     }
 };
 
