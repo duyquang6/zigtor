@@ -35,40 +35,71 @@ pub const Torrent = struct {
         return r.end - r.begin;
     }
 
-    fn startDownload(self: Torrent, p: peer.PeerIPv4, pws: []PieceWork, retry_pws: []PieceWork, results: []PieceResult) !void {
+    fn startDownload(self: Torrent, p: peer.PeerIPv4, pws: []PieceWork, result: []PieceResult, retry_limit: u8) !usize {
         const c = try client.Client.init(p, self.peer_id, self.info_hash);
         defer c.conn.close();
 
         c.sendUnchoke();
         c.sendInterested();
 
-        var i_retry: usize = 0;
         var i_result: usize = 0;
         for (pws) |pw| {
             if (!bitfield.hasPiece(c.bitfield, pw.index)) {
-                retry_pws[i_retry] = pw;
-                i_retry += 1;
                 continue;
             }
 
-            const buf = pw.attemptDownloadOnePiece(c) catch |err| {
-                std.debug.print("download piece {} failed, pushback retry later\n", .{pw.index});
-                return err;
-            };
+            var retry_cnt: u8 = 0;
 
-            pw.checkIntegrity(buf) catch {
-                std.debug.print("piece {} failed integrity check\n", .{pw.index});
-                continue;
-            };
+            while (retry_cnt < retry_limit) {
+                const buf = pw.attemptDownloadOnePiece(c) catch |err| {
+                    std.debug.print("download piece {} failed: error={}, pushback retry later\n", .{ err, pw.index });
+                    retry_cnt += 1;
+                    continue;
+                };
+                pw.checkIntegrity(buf) catch {
+                    std.debug.print("piece {} failed integrity check\n", .{pw.index});
+                    retry_cnt += 1;
+                    continue;
+                };
+                result[i_result] = PieceResult{ .index = pw.index, .buf = buf };
+                i_result += 1;
+                break;
+            }
 
             c.sendHave(pw.index);
-            results[i_result] = PieceResult{ .index = pw.index, .buf = buf };
-            i_result += 1;
         }
+
+        return i_result + 1;
     }
 
-    fn download(self: *Torrent) ![]u8 {
+    fn download(self: *Torrent, allocator: std.mem.Allocator) ![]u8 {
         std.debug.print("Starting download for {s}", .{self.name});
+        const batch_size = 1024;
+        var pws: [batch_size]PieceWork = undefined;
+        var res: [batch_size]PieceResult = undefined;
+        var done: usize = 0;
+        var out_buf = try std.ArrayList(u8).initCapacity(allocator, self.length);
+
+        for (self.piece_hashes, 0..) |hash, index| {
+            const length = self.calculatePieceSize(index);
+
+            pws[index % batch_size] = PieceWork{ .index = index, .hash = hash, .length = length };
+
+            if (index % batch_size == 0 or index == self.piece_hashes.len - 1) {
+                // block batch piece_hashes
+                const n = try startDownload(self, self.peer, &pws, &res);
+
+                for (0..n) |i| {
+                    // NOTE: copy result to output buffer
+                    _ = i;
+                    // _ = out_buf;
+                    // res[i].buf
+                }
+                done += n;
+            }
+        }
+
+        try testing.expectEqual(self.piece_hashes.len, done);
     }
 };
 
