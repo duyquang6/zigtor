@@ -128,7 +128,7 @@ pub fn print_hex_bytes(bin_data: []u8) void {
     print("\n", .{});
 }
 test "parse torrent file" {
-    var torrent_file = try TorrentFile.parse(testing.allocator, "/home/ligt/zig/zigtor/[HorribleSubs] One Punch Man S2 - 01 [1080p].mkv.torrent");
+    var torrent_file = try TorrentFile.parse(testing.allocator, "/home/ligt/zig/zigtor/assets/[HorribleSubs] One Punch Man S2 - 01 [1080p].mkv.torrent");
     defer torrent_file.deinit();
 
     try testing.expectEqual(1554834963, torrent_file.creation_date);

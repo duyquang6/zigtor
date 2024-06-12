@@ -9,4 +9,5 @@ test {
     _ = @import("message.zig");
     _ = @import("bitfield.zig");
     _ = @import("client.zig");
+    // _ = @import("p2p.zig");
 }

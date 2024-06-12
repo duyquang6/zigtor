@@ -91,7 +91,7 @@ pub fn print_ip(ip: u32) void {
 }
 
 test "parse peer v4 binary" {
-    const announce_file_path = "/home/ligt/zig/zigtor/announce_data";
+    const announce_file_path = "/home/ligt/zig/zigtor/assets/announce_data";
     const announce_file = try std.fs.openFileAbsolute(announce_file_path, .{});
     defer announce_file.close();
     const announce_file_content = try announce_file.readToEndAlloc(testing.allocator, std.math.maxInt(usize));
